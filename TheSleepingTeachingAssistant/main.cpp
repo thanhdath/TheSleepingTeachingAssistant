@@ -16,7 +16,7 @@ class Student {
 private: 
 	HANDLE handle;
 	string name;
-	int status; // 0: programming, 1: isBeingHelped, 2: waiting
+	int status; // 0: programming, 1: isBeingHelped, 2: waiting0, 3: waiting1, 4: waiting2, 5: waiting3
 public:
 	Student(){}
 	Student(string name) {
@@ -67,16 +67,16 @@ public:
 	}
 };
 
+// Remove numbers
 class Chairs {
 	Student *students[3] = {0};
-	int numbers;
+	int numbers = 0;
 public:
 	Chairs(){}
 	void put(Student *student, int index) {
 		if (students[index] != 0)
 		{
-			students[index] = student;
-			
+			students[index] = student;	
 		}
 		else {
 			students[index] = student;
@@ -88,7 +88,6 @@ public:
 			students[index] = 0;
 			numbers--;
 		}
-
 	}
 	int getNumbers() {
 		return numbers;
@@ -109,60 +108,16 @@ vector<Student *> studentsInChairs;
 int help_time;
 Student *working = 0;
 
-/*
-void printCheck() {
-	int i = 0;
-	while (i < 50) {
-		printf("\nStudents In Chairs: ");
-		for (int i = 0; i < studentsInChairs.size(); i++) {
-			printf("\t%s", studentsInChairs[i]->getName().c_str());
-		}
-		printf("\nAssistant: ");
-		if (assistant->isSleeping()) {
-			printf("Sleeping");
-		}
-		else printf("Working");
-
-		printf("\n Status of students: ");
-		for (int i = 0; i < 3; i++) {
-			printf("\t%s:", students[i]->getName().c_str());
-			if (students[i]->getStatus() == 0) {
-				printf(" programming");
-			}
-			else if (students[i]->getStatus() == 1) {
-				printf(" isBeingHelped");
-			}
-			else {
-				printf(" waiting");
-			}
-		}
-		printf("\n");
-		Sleep(20);
-		i++;
-	}
-}
-
-bool hasStudentInChairs() {
-	if (studentsInChairs.size() > 0)
-		return true;
-	return false;
-}
-*/
 void printCheck() {
 	int i = 0;
 	while (1) {
+		system("cls");
 		printf("\nStudents In Chairs: ");
 		for (int i = 0; i < 3; i++) {
 			if (chairs->getStudent(i) != 0)
 				cout << "\t" << chairs->getStudent(i)->getName();
 			else
 				cout << "\t";
-			/*
-			if (chairs->getStudent(i) != NULL)
-				printf("\t%s", chairs->getStudent(i)->getName().c_str());
-			else
-				printf("\t");
-				*/
 		}
 		printf("\nAssistant: ");
 		if (assistant->isSleeping()) {
@@ -185,11 +140,11 @@ void printCheck() {
 				printf(" help");
 			}
 			else {
-				printf(" wait");
+				printf(" wait%d", students[i]->getStatus() - 2);
 			}
 		}
-		printf("\n");
-		Sleep(50);
+		printf("\n %d", chairs->getNumbers());
+		Sleep(10);
 		i++;
 	}
 }
@@ -200,20 +155,9 @@ bool hasStudentInChairs() {
 	return false;
 }
 
-/*
-int positionInChairs(Student *student) {
-	for (int i = 0; i < studentsInChairs.size(); i++) {
-		if (studentsInChairs[i] == student) {
-			return i;
-		}
-	}
-	return -1;
-}*/
-
 void assistantAction(TeachingAssistant *ta) {
 	while (1) {
-		
-		if (hasStudentInChairs()) {
+		if (chairs->getNumbers()) {
 			// 
 			help_time = (int)(rand() % 100 + 100);
 
@@ -236,20 +180,27 @@ void assistantAction(TeachingAssistant *ta) {
 }
 
 void wait(Student *student) {
-	student->setStatus(2);
+	student->setStatus(5);
 	WaitForSingleObject(SS3, INFINITE);
 	chairs->put(student, 2);
+
+	student->setStatus(4);
 	WaitForSingleObject(SS2, INFINITE);
 	chairs->put(student, 1);
-	ReleaseSemaphore(SS3, 1, NULL);
 	chairs->deleteAt(2);
+	ReleaseSemaphore(SS3, 1, NULL);
+	
+	student->setStatus(3);
 	WaitForSingleObject(SS1, INFINITE);
 	chairs->put(student, 0);
-	ReleaseSemaphore(SS2, 1, NULL);
 	chairs->deleteAt(1);
+	ReleaseSemaphore(SS2, 1, NULL);
+	
+	student->setStatus(2);
 	WaitForSingleObject(SS0, INFINITE);
-	ReleaseSemaphore(SS1, 1, NULL);
+	student->setStatus(1);
 	chairs->deleteAt(0);
+	ReleaseSemaphore(SS1, 1, NULL);
 }
 
 void studentAction(Student *student) {
@@ -261,14 +212,12 @@ void studentAction(Student *student) {
 		wait(student);
 		if (assistant->isSleeping()) {
 			ReleaseSemaphore(SSA, 1, NULL);
+		}
 			while (help_time == 0);
 			student->setStatus(1);
 			working = student;
 			Sleep(help_time);
 			working = 0;
-		}
-
-		
 	}
 }
 
@@ -284,14 +233,11 @@ int main() {
 	SS3 = CreateSemaphore(NULL, 1, 1, NULL);
 	SSA = CreateSemaphore(NULL, 0, 1, NULL);
 
-	
 	for (int i = 0; i < NUMBER_STUDENTS; i++) {
 		students[i]->setHandle(CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)studentAction, students[i], 0, NULL));
 	}
 	assistant->setHandle(CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)assistantAction, assistant, 0, NULL));
 	CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)printCheck, NULL, 0, NULL);
-
-
 
 	getchar();
 	return 0;
