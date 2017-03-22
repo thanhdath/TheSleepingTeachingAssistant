@@ -16,29 +16,25 @@ class Student {
 private: 
 	HANDLE handle;
 	string name;
-	int status; // 0: programming, 1: isBeingHelped, 2: waiting0, 3: waiting1, 4: waiting2, 5: waiting3
+	string status = "";
 public:
-	Student(){}
 	Student(string name) {
 		this->name = name;
 	}
 	void program(int time) {
-		status = 0;
+		status = "program";
 		Sleep(time);
 	}
 	void setHandle(HANDLE handle) {
 		this->handle = handle;
 	}
-	void setStatus(int status) {
+	void setStatus(string status) {
 		this->status = status;
-	}
-	HANDLE getHandle() {
-		return handle;
 	}
 	string getName() {
 		return name;
 	}
-	int getStatus() {
+	string getStatus() {
 		return status;
 	}
 };
@@ -46,28 +42,23 @@ public:
 class TeachingAssistant {
 private:
 	HANDLE handle;
-	int status; // 0: sleep, 1: help
+	string status = "";
 public:
 	TeachingAssistant(){}
 	void setHandle(HANDLE handle) {
 		this->handle = handle;
 	}
-	void sleep(HANDLE semaphore) {
-		status = 0;
-		WaitForSingleObject(semaphore, INFINITE);
-	}
-	void setStatus(int status) {
+	void setStatus(string status) {
 		this->status = status;
 	}
 	HANDLE getHandle() {
 		return handle;
 	}
-	bool isSleeping() {
-		return status == 0;
+	string getStatus() {
+		return status;
 	}
 };
 
-// Remove numbers
 class Chairs {
 	Student *students[3] = {0};
 	int numbers = 0;
@@ -100,13 +91,13 @@ public:
 vector<Student*> students;
 TeachingAssistant *assistant;
 Chairs *chairs = new Chairs();
-HANDLE SS0, SS1, SS2, SS3, SSA;
-
-//vector<Student*> studentsInChairs;
-vector<Student *> studentsInChairs;
-
 int help_time;
-Student *working = 0;
+
+HANDLE sChairWork = CreateSemaphore(NULL, 1, 1, NULL);
+HANDLE sChair1 = CreateSemaphore(NULL, 1, 1, NULL);
+HANDLE sChair2 = CreateSemaphore(NULL, 1, 1, NULL);
+HANDLE sChair3 = CreateSemaphore(NULL, 1, 1, NULL);
+HANDLE sAssistant = CreateSemaphore(NULL, 0, 1, NULL);
 
 void printCheck() {
 	int i = 0;
@@ -119,40 +110,53 @@ void printCheck() {
 			else
 				cout << "\t";
 		}
-		printf("\nAssistant: ");
-		if (assistant->isSleeping()) {
-			printf("Sleeping");
-		}
-		else {
-			printf("Working with ");
-			if (working != 0) {
-				cout << working->getName();
-			}
-		}
+		printf("\nAssistant: %s", assistant->getStatus().c_str());
 
 		printf("\n Status of students: ");
 		for (int i = 0; i < NUMBER_STUDENTS; i++) {
-			printf("   %s:", students[i]->getName().c_str());
-			if (students[i]->getStatus() == 0) {
-				printf(" prog");
-			}
-			else if (students[i]->getStatus() == 1) {
-				printf(" help");
-			}
-			else {
-				printf(" wait%d", students[i]->getStatus() - 2);
-			}
+			printf("   %s: %s", students[i]->getName().c_str(), students[i]->getStatus().c_str());
 		}
-		printf("\n %d", chairs->getNumbers());
 		Sleep(10);
 		i++;
 	}
 }
 
-bool hasStudentInChairs() {
-	if (chairs->getNumbers() > 0)
-		return true;
-	return false;
+void wait(Student *student) {
+	student->setStatus("wait 3");
+	WaitForSingleObject(sChair3, INFINITE);
+	chairs->put(student, 2);
+
+	student->setStatus("wait 2");
+	WaitForSingleObject(sChair2, INFINITE);
+	chairs->put(student, 1);
+	chairs->deleteAt(2);
+	ReleaseSemaphore(sChair3, 1, NULL);
+	
+	student->setStatus("wait 1");
+	WaitForSingleObject(sChair1, INFINITE);
+	chairs->put(student, 0);
+	chairs->deleteAt(1);
+	ReleaseSemaphore(sChair2, 1, NULL);
+	
+	student->setStatus("wait work");
+	WaitForSingleObject(sChairWork, INFINITE);
+	chairs->deleteAt(0);
+	ReleaseSemaphore(sChair1, 1, NULL);
+}
+
+void studentAction(Student *student) {
+	while (1) {
+		int program_time = (int)(rand() % 100 + 100);
+		student->program(program_time);
+		// seek help
+		wait(student);
+		if (assistant->getStatus() == "sleep") {
+			ReleaseSemaphore(sAssistant, 1, NULL);
+		}
+		while (help_time == 0);
+		student->setStatus("help");
+		Sleep(help_time);
+	}
 }
 
 void assistantAction(TeachingAssistant *ta) {
@@ -161,63 +165,22 @@ void assistantAction(TeachingAssistant *ta) {
 			// 
 			help_time = (int)(rand() % 100 + 100);
 
-			ta->setStatus(1);
+			ta->setStatus("help");
 			Sleep(help_time);
 			help_time = 0;
-			ReleaseSemaphore(SS0, 1, NULL);
+			ReleaseSemaphore(sChairWork, 1, NULL);
 		}
 		else {
-			ta->sleep(SSA);
+			ta->setStatus("sleep");
+			WaitForSingleObject(sAssistant, INFINITE);
 
 			help_time = (int)(rand() % 100 + 100);
 
-			ta->setStatus(1);
+			ta->setStatus("help");
 			Sleep(help_time);
 			help_time = 0;
-			ReleaseSemaphore(SS0, 1, NULL);
-		} 
-	}
-}
-
-void wait(Student *student) {
-	student->setStatus(5);
-	WaitForSingleObject(SS3, INFINITE);
-	chairs->put(student, 2);
-
-	student->setStatus(4);
-	WaitForSingleObject(SS2, INFINITE);
-	chairs->put(student, 1);
-	chairs->deleteAt(2);
-	ReleaseSemaphore(SS3, 1, NULL);
-	
-	student->setStatus(3);
-	WaitForSingleObject(SS1, INFINITE);
-	chairs->put(student, 0);
-	chairs->deleteAt(1);
-	ReleaseSemaphore(SS2, 1, NULL);
-	
-	student->setStatus(2);
-	WaitForSingleObject(SS0, INFINITE);
-	student->setStatus(1);
-	chairs->deleteAt(0);
-	ReleaseSemaphore(SS1, 1, NULL);
-}
-
-void studentAction(Student *student) {
-	while (1) {
-		int program_time = (int)(rand() % 100 + 100);
-		student->program(program_time);
-		// seek help
-		
-		wait(student);
-		if (assistant->isSleeping()) {
-			ReleaseSemaphore(SSA, 1, NULL);
+			ReleaseSemaphore(sChairWork, 1, NULL);
 		}
-			while (help_time == 0);
-			student->setStatus(1);
-			working = student;
-			Sleep(help_time);
-			working = 0;
 	}
 }
 
@@ -226,12 +189,6 @@ int main() {
 		students.push_back(new Student("S" + to_string(i)));
 	}
 	assistant = new TeachingAssistant();
-
-	SS0 = CreateSemaphore(NULL, 1, 1, NULL);
-	SS1 = CreateSemaphore(NULL, 1, 1, NULL);
-	SS2 = CreateSemaphore(NULL, 1, 1, NULL);
-	SS3 = CreateSemaphore(NULL, 1, 1, NULL);
-	SSA = CreateSemaphore(NULL, 0, 1, NULL);
 
 	for (int i = 0; i < NUMBER_STUDENTS; i++) {
 		students[i]->setHandle(CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)studentAction, students[i], 0, NULL));
